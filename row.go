@@ -79,7 +79,10 @@ func (row *Row) Init() {
 		if ok && sv == onUpdateNow {
 			row.updateColumns = append(row.updateColumns, fieldKey)
 			row.updateValues = append(row.updateValues, time.Now())
-			row.insertColumnLength--
+			
+			row.insertColumns = append(row.insertColumns, fieldKey)
+			row.insertValues = append(row.insertValues, time.Now())
+			//row.insertColumnLength--
 			continue
 		}
 		row.insertColumns = append(row.insertColumns, fieldKey)
