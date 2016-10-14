@@ -8,11 +8,14 @@ import (
 )
 
 const (
-	onInsertNow        = "ON_INSERT_NOW()"
-	onUpdateNow        = "ON_UPDATE_NOW()"
-	onPKGeneratePrefix = "ON_PK_GENERATE("
-	onPKGenerateSuffix = ")"
-	postgresDriver     = "postgres"
+	onInsertNow         = "ON_INSERT_NOW()"
+	onUpdateNow         = "ON_UPDATE_NOW()"
+	onPKGeneratePrefix  = "PK_GENERATE("
+	onPKGenerateSuffix  = ")"
+	onPKReferencePrefix = "PK_REFERENCE("
+	onPKReferenceSuffix = ")"
+
+	postgresDriver = "postgres"
 )
 
 // Row represents a single database row
@@ -33,12 +36,16 @@ type PrimaryKeyGenerator struct {
 	name string
 }
 
-func (pk *PrimaryKeyGenerator) Get(values map[string]interface{}) interface{} {
-	return values[pk.name]
-}
-
 func (pk *PrimaryKeyGenerator) Set(values map[string]interface{}, key interface{}) {
 	values[pk.name] = key
+}
+
+type PrimaryKeyReference struct {
+	name string
+}
+
+func (pk *PrimaryKeyReference) Get(values map[string]interface{}) interface{} {
+	return values[pk.name]
 }
 
 // Init loads internal struct variables
@@ -59,17 +66,20 @@ func (row *Row) Init() {
 
 	for _, pkKey := range row.pkColumns {
 		sv, ok := row.PK[pkKey].(string)
-		if ok &&
-			strings.HasPrefix(sv, onPKGeneratePrefix) &&
-			strings.HasPrefix(sv, onPKGenerateSuffix) {
-			keyName := strings.TrimPrefix(strings.TrimPrefix(sv, onPKGenerateSuffix), onPKGeneratePrefix)
-			row.pkValues = append(row.pkValues, &PrimaryKeyGenerator{name: strings.TrimSpace(keyName)})
-		} else {
-			row.pkValues = append(row.pkValues, row.PK[pkKey])
-
-			row.insertColumns = append(row.insertColumns, pkKey)
-			row.insertValues = append(row.insertValues, row.PK[pkKey])
+		if ok {
+			if strings.HasPrefix(sv, onPKGeneratePrefix) &&
+				strings.HasSuffix(sv, onPKGenerateSuffix) {
+				keyName := strings.TrimPrefix(strings.TrimSuffix(sv, onPKGenerateSuffix), onPKGeneratePrefix)
+				row.pkValues = append(row.pkValues, &PrimaryKeyGenerator{name: strings.TrimSpace(keyName)})
+				continue
+			} else if strings.HasPrefix(sv, onPKReferencePrefix) &&
+				strings.HasSuffix(sv, onPKReferenceSuffix) {
+				keyName := strings.TrimPrefix(strings.TrimSuffix(sv, onPKReferenceSuffix), onPKReferencePrefix)
+				row.pkValues = append(row.pkValues, &PrimaryKeyReference{name: strings.TrimSpace(keyName)})
+				continue
+			}
 		}
+		row.pkValues = append(row.pkValues, row.PK[pkKey])
 	}
 
 	// Field Values
@@ -98,17 +108,18 @@ func (row *Row) Init() {
 			continue
 		}
 
+		if ok && strings.HasPrefix(sv, onPKReferencePrefix) &&
+			strings.HasSuffix(sv, onPKReferenceSuffix) {
+			keyName := strings.TrimPrefix(strings.TrimSuffix(sv, onPKReferenceSuffix), onPKReferencePrefix)
+			fieldValue = &PrimaryKeyReference{name: strings.TrimSpace(keyName)}
+		}
+
 		row.insertColumns = append(row.insertColumns, fieldKey)
 		row.insertValues = append(row.insertValues, fieldValue)
 
 		row.updateColumns = append(row.updateColumns, fieldKey)
 		row.updateValues = append(row.updateValues, fieldValue)
 	}
-}
-
-// GetInsertColumnsLength returns number of columns for INSERT query
-func (row *Row) GetInsertColumnsLength() int {
-	return len(row.GetInsertColumns())
 }
 
 // GetInsertColumns returns a slice of column names for INSERT query
@@ -124,7 +135,7 @@ func (row *Row) GetInsertColumns() []string {
 func (row *Row) GetInsertValues(primaryKeys map[string]interface{}) []interface{} {
 	insertValues := make([]interface{}, len(row.insertValues))
 	for idx, value := range row.insertValues {
-		if generator, ok := value.(*PrimaryKeyGenerator); ok {
+		if generator, ok := value.(*PrimaryKeyReference); ok {
 			insertValues[idx] = generator.Get(primaryKeys)
 		} else {
 			insertValues[idx] = value
@@ -135,8 +146,49 @@ func (row *Row) GetInsertValues(primaryKeys map[string]interface{}) []interface{
 
 // GetInsertPlaceholders returns a slice of placeholders for INSERT query
 func (row *Row) GetInsertPlaceholders(driver string) []string {
-	placeholders := make([]string, row.GetInsertColumnsLength())
-	for i := 0; i < row.GetInsertColumnsLength(); i++ {
+	placeholders := make([]string, len(row.insertValues))
+	for i := 0; i < len(placeholders); i++ {
+		if driver == postgresDriver {
+			placeholders[i] = fmt.Sprintf("$%d", i+1)
+		} else {
+			placeholders[i] = "?"
+		}
+	}
+	return placeholders
+}
+
+// GetPKAndInsertColumns returns a slice of column names for INSERT query
+func (row *Row) GetPKAndInsertColumns() []string {
+	escapedColumns := make([]string, 0, len(row.pkColumns)+len(row.insertColumns))
+
+	for _, insertColumn := range row.pkColumns {
+		escapedColumns = append(escapedColumns, fmt.Sprintf("\"%s\"", insertColumn))
+	}
+	for _, insertColumn := range row.insertColumns {
+		escapedColumns = append(escapedColumns, fmt.Sprintf("\"%s\"", insertColumn))
+	}
+	return escapedColumns
+}
+
+// GetPKAndInsertValues returns a slice of values for INSERT query
+func (row *Row) GetPKAndInsertValues(primaryKeys map[string]interface{}) []interface{} {
+	insertValues := make([]interface{}, 0, len(row.pkValues)+len(row.insertValues))
+	for _, values := range [][]interface{}{row.pkValues, row.insertValues} {
+		for _, value := range values {
+			if generator, ok := value.(*PrimaryKeyReference); ok {
+				insertValues = append(insertValues, generator.Get(primaryKeys))
+			} else {
+				insertValues = append(insertValues, value)
+			}
+		}
+	}
+	return insertValues
+}
+
+// GetPKAndInsertPlaceholders returns a slice of placeholders for INSERT query
+func (row *Row) GetPKAndInsertPlaceholders(driver string) []string {
+	placeholders := make([]string, len(row.pkValues)+len(row.insertValues))
+	for i := 0; i < len(placeholders); i++ {
 		if driver == postgresDriver {
 			placeholders[i] = fmt.Sprintf("$%d", i+1)
 		} else {
@@ -164,7 +216,7 @@ func (row *Row) GetUpdateColumnsLength() int {
 func (row *Row) GetUpdateValues(primaryKeys map[string]interface{}) []interface{} {
 	updateValues := make([]interface{}, len(row.updateValues))
 	for idx, value := range row.updateValues {
-		if generator, ok := value.(*PrimaryKeyGenerator); ok {
+		if generator, ok := value.(*PrimaryKeyReference); ok {
 			updateValues[idx] = generator.Get(primaryKeys)
 		} else {
 			updateValues[idx] = value
@@ -202,8 +254,16 @@ func (row *Row) GetWhere(driver string, i int) string {
 }
 
 // GetPKValues returns a slice of primary key values
-func (row *Row) GetPKValues() []interface{} {
-	return row.pkValues
+func (row *Row) GetPKValues(primaryKeys map[string]interface{}) []interface{} {
+	pkValues := make([]interface{}, len(row.pkValues))
+	for idx, value := range row.pkValues {
+		if generator, ok := value.(*PrimaryKeyReference); ok {
+			pkValues[idx] = generator.Get(primaryKeys)
+		} else {
+			pkValues[idx] = value
+		}
+	}
+	return pkValues
 }
 
 // GetPKColumns returns a slice of primary key names

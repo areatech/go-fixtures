@@ -45,7 +45,7 @@ func Load(data []byte, db *sql.DB, driver string) error {
 		// Load internat struct variables
 		row.Init()
 
-		if pkValues := row.GetPKValues(); len(pkValues) == 1 {
+		if pkValues := row.GetPKValues(primaryKeys); len(pkValues) == 1 {
 			if generator, ok := pkValues[0].(*PrimaryKeyGenerator); ok {
 				insertQuery := fmt.Sprintf(
 					`INSERT INTO "%s"(%s) VALUES(%s)`,
@@ -53,17 +53,23 @@ func Load(data []byte, db *sql.DB, driver string) error {
 					strings.Join(row.GetInsertColumns(), ", "),
 					strings.Join(row.GetInsertPlaceholders(driver), ", "),
 				)
-				if DumpSQL {
-					log.Println("SQL:", insertQuery, row.GetInsertValues(primaryKeys))
-				}
 				if "postgres" == driver {
+					insertQuery = insertQuery + " RETURNING " + row.GetPKColumns()[0]
+					if DumpSQL {
+						log.Println("SQL:", insertQuery, row.GetInsertValues(primaryKeys))
+					}
+
 					var pk int64
-					err := tx.QueryRow(insertQuery+" RETURNING '"+row.GetPKColumns()[0]+"'", row.GetInsertValues(primaryKeys)...).Scan(&pk)
+					err := tx.QueryRow(insertQuery, row.GetInsertValues(primaryKeys)...).Scan(&pk)
 					if err != nil {
 						return NewProcessingError(i+1, err)
 					}
 					generator.Set(primaryKeys, pk)
 				} else {
+					if DumpSQL {
+						log.Println("SQL:", insertQuery, row.GetInsertValues(primaryKeys))
+					}
+
 					res, err := tx.Exec(insertQuery, row.GetInsertValues(primaryKeys)...)
 					if err != nil {
 						return NewProcessingError(i+1, err)
@@ -86,8 +92,12 @@ func Load(data []byte, db *sql.DB, driver string) error {
 			row.GetWhere(driver, 0),
 		)
 
+		if DumpSQL {
+			log.Println("SQL:", selectQuery, row.GetPKValues(primaryKeys))
+		}
+
 		var count int
-		err = tx.QueryRow(selectQuery, row.GetPKValues()...).Scan(&count)
+		err = tx.QueryRow(selectQuery, row.GetPKValues(primaryKeys)...).Scan(&count)
 		if err != nil {
 			return NewProcessingError(i+1, err)
 		}
@@ -97,17 +107,17 @@ func Load(data []byte, db *sql.DB, driver string) error {
 			insertQuery := fmt.Sprintf(
 				`INSERT INTO "%s"(%s) VALUES(%s)`,
 				row.Table,
-				strings.Join(row.GetInsertColumns(), ", "),
-				strings.Join(row.GetInsertPlaceholders(driver), ", "),
+				strings.Join(row.GetPKAndInsertColumns(), ", "),
+				strings.Join(row.GetPKAndInsertPlaceholders(driver), ", "),
 			)
 			if DumpSQL {
-				log.Println("SQL:", insertQuery, row.GetInsertValues(primaryKeys))
+				log.Println("SQL:", insertQuery, row.GetPKAndInsertValues(primaryKeys))
 			}
-			_, err := tx.Exec(insertQuery, row.GetInsertValues(primaryKeys)...)
+			_, err := tx.Exec(insertQuery, row.GetPKAndInsertValues(primaryKeys)...)
 			if err != nil {
 				return NewProcessingError(i+1, err)
 			}
-			if driver == postgresDriver && row.GetInsertColumns()[0] == "\"id\"" {
+			if driver == postgresDriver && row.GetPKAndInsertColumns()[0] == "\"id\"" {
 				err = fixPostgresPKSequence(tx, row.Table, "id")
 				if err != nil {
 					return NewProcessingError(i+1, err)
@@ -121,7 +131,7 @@ func Load(data []byte, db *sql.DB, driver string) error {
 				strings.Join(row.GetUpdatePlaceholders(driver), ", "),
 				row.GetWhere(driver, row.GetUpdateColumnsLength()),
 			)
-			values := append(row.GetUpdateValues(primaryKeys), row.GetPKValues()...)
+			values := append(row.GetUpdateValues(primaryKeys), row.GetPKValues(primaryKeys)...)
 			if DumpSQL {
 				log.Println("SQL:", updateQuery, values)
 			}
