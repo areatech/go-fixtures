@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"log"
 	"os"
+	"runtime"
 	"testing"
 	"time"
 
@@ -13,6 +14,12 @@ import (
 )
 
 var testSQLiteDb = "/tmp/fixtures_testdb.sqlite"
+
+func init() {
+	if runtime.GOOS == "windows" {
+		testSQLiteDb = "fixtures_testdb.sqlite"
+	}
+}
 
 func TestLoadWorksWithValidDataSQLite(t *testing.T) {
 	// Delete the test database
@@ -378,7 +385,11 @@ func TestLoadFileFailssWithMissingFileSQLite(t *testing.T) {
 	err = LoadFile("bad_filename.yml", db, "sqlite")
 
 	// Error should be nil
-	assert.EqualError(t, err, "Error loading file bad_filename.yml: open bad_filename.yml: no such file or directory")
+	if runtime.GOOS == "windows" {
+		assert.EqualError(t, err, "Error loading file bad_filename.yml: open bad_filename.yml: The system cannot find the file specified.")
+	} else {
+		assert.EqualError(t, err, "Error loading file bad_filename.yml: open bad_filename.yml: no such file or directory")
+	}
 }
 
 func TestLoadFilesWorksWithValidFilesSQLite(t *testing.T) {
@@ -489,5 +500,9 @@ func TestLoadFilesFailsWithABadFileSQLite(t *testing.T) {
 	err = LoadFiles(badList, db, "sqlite")
 
 	// Error should be nil
-	assert.EqualError(t, err, "Error loading file bad_file: open bad_file: no such file or directory")
+	if runtime.GOOS == "windows" {
+		assert.EqualError(t, err, "Error loading file bad_file: open bad_file: The system cannot find the file specified.")
+	} else {
+		assert.EqualError(t, err, "Error loading file bad_file: open bad_file: no such file or directory")
+	}
 }

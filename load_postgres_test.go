@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"os/exec"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -373,7 +375,11 @@ func TestLoadFileFailssWithMissingFilePostgres(t *testing.T) {
 	err = LoadFile("bad_filename.yml", db, "postgres")
 
 	// Error should be nil
-	assert.EqualError(t, err, "Error loading file bad_filename.yml: open bad_filename.yml: no such file or directory")
+	if runtime.GOOS == "windows" {
+		assert.EqualError(t, err, "Error loading file bad_filename.yml: open bad_filename.yml: The system cannot find the file specified.")
+	} else {
+		assert.EqualError(t, err, "Error loading file bad_filename.yml: open bad_filename.yml: no such file or directory")
+	}
 }
 
 func TestLoadFilesWorksWithValidFilesPostgres(t *testing.T) {
@@ -478,7 +484,11 @@ func TestLoadFilesFailsWithABadFilePostgres(t *testing.T) {
 	err = LoadFiles(badList, db, "postgres")
 
 	// Error should be nil
-	assert.EqualError(t, err, "Error loading file bad_file: open bad_file: no such file or directory")
+	if runtime.GOOS == "windows" {
+		assert.EqualError(t, err, "Error loading file bad_file: open bad_file: The system cannot find the file specified.")
+	} else {
+		assert.EqualError(t, err, "Error loading file bad_file: open bad_file: no such file or directory")
+	}
 }
 
 // rebuildDatabase attempts to delete an existing Postgres
@@ -495,6 +505,12 @@ func rebuildDatabasePostgres(dbUser, dbName string) (*sql.DB, error) {
 }
 
 func openPostgresDB(dbUser, dbName string) (*sql.DB, error) {
+	if runtime.GOOS == "windows" { // Init a new postgres test database connection
+		return sql.Open("postgres",
+			fmt.Sprintf("sslmode=disable host=localhost port=5432 user=%s password='123456' dbname=%s",
+				dbUser, dbName),
+		)
+	}
 	// Init a new postgres test database connection
 	return sql.Open("postgres",
 		fmt.Sprintf(
@@ -506,6 +522,18 @@ func openPostgresDB(dbUser, dbName string) (*sql.DB, error) {
 }
 
 func createPostgresDB(dbUser, dbName string) error {
+	if runtime.GOOS == "windows" {
+		db, err := sql.Open("postgres", fmt.Sprintf(
+			"sslmode=disable host=localhost port=5432 user=%s password='123456' dbname=postgres",
+			dbUser))
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+
+		_, err = db.Exec(`CREATE DATABASE go_fixtures_test WITH OWNER = go_fixtures;`)
+		return err
+	}
 	// Create a new test database
 	createDbCmd := fmt.Sprintf("createdb -U %s %s", dbUser, dbName)
 	log.Println(createDbCmd)
@@ -518,6 +546,26 @@ func createPostgresDB(dbUser, dbName string) error {
 }
 
 func dropPostgresDB(dbUser, dbName string) {
+	if runtime.GOOS == "windows" {
+		db, err := sql.Open("postgres", fmt.Sprintf(
+			"sslmode=disable host=localhost port=5432 user=%s password='123456' dbname=postgres",
+			dbUser))
+		if err != nil {
+			panic(err)
+			return
+		}
+		defer db.Close()
+
+		_, err = db.Exec(`DROP DATABASE go_fixtures_test;`)
+
+		if err != nil {
+			if !strings.Contains(err.Error(), "does not exist") {
+				panic(err)
+			}
+		}
+		return
+	}
+
 	// Delete the current database if it exists
 	dropDbCmd := fmt.Sprintf("dropdb --if-exists -U %s %s", dbUser, dbName)
 	fmt.Println(dropDbCmd)

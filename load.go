@@ -4,10 +4,14 @@ import (
 	"database/sql"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"strings"
 
-	"gopkg.in/yaml.v2"
+	yaml "gopkg.in/yaml.v2"
 )
+
+var DumpSQL = true
+var SetUpdatedAtOnInsert = false
 
 // NewProcessingError ...
 func NewProcessingError(row int, cause error) error {
@@ -32,11 +36,48 @@ func Load(data []byte, db *sql.DB, driver string) error {
 	if err != nil {
 		return err
 	}
+	defer tx.Rollback() // rollback the transaction
+
+	primaryKeys := map[string]interface{}{}
 
 	// Iterate over rows define in the fixture
 	for i, row := range rows {
 		// Load internat struct variables
 		row.Init()
+
+		if pkValues := row.GetPKValues(); len(pkValues) == 1 {
+			if generator, ok := pkValues[0].(*PrimaryKeyGenerator); ok {
+				insertQuery := fmt.Sprintf(
+					`INSERT INTO "%s"(%s) VALUES(%s)`,
+					row.Table,
+					strings.Join(row.GetInsertColumns(), ", "),
+					strings.Join(row.GetInsertPlaceholders(driver), ", "),
+				)
+				if DumpSQL {
+					log.Println("SQL:", insertQuery, row.GetInsertValues(primaryKeys))
+				}
+				if "postgres" == driver {
+					var pk int64
+					err := tx.QueryRow(insertQuery+" RETURNING '"+row.GetPKColumns()[0]+"'", row.GetInsertValues(primaryKeys)...).Scan(&pk)
+					if err != nil {
+						return NewProcessingError(i+1, err)
+					}
+					generator.Set(primaryKeys, pk)
+				} else {
+					res, err := tx.Exec(insertQuery, row.GetInsertValues(primaryKeys)...)
+					if err != nil {
+						return NewProcessingError(i+1, err)
+					}
+					pk, err := res.LastInsertId()
+					if err != nil {
+						return NewProcessingError(i+1, err)
+					}
+					generator.Set(primaryKeys, pk)
+				}
+
+				continue
+			}
+		}
 
 		// Run a SELECT query to find out if we need to insert or UPDATE
 		selectQuery := fmt.Sprintf(
@@ -44,10 +85,10 @@ func Load(data []byte, db *sql.DB, driver string) error {
 			row.Table,
 			row.GetWhere(driver, 0),
 		)
+
 		var count int
 		err = tx.QueryRow(selectQuery, row.GetPKValues()...).Scan(&count)
 		if err != nil {
-			tx.Rollback() // rollback the transaction
 			return NewProcessingError(i+1, err)
 		}
 
@@ -59,19 +100,20 @@ func Load(data []byte, db *sql.DB, driver string) error {
 				strings.Join(row.GetInsertColumns(), ", "),
 				strings.Join(row.GetInsertPlaceholders(driver), ", "),
 			)
-			_, err := tx.Exec(insertQuery, row.GetInsertValues()...)
+			if DumpSQL {
+				log.Println("SQL:", insertQuery, row.GetInsertValues(primaryKeys))
+			}
+			_, err := tx.Exec(insertQuery, row.GetInsertValues(primaryKeys)...)
 			if err != nil {
-				tx.Rollback() // rollback the transaction
 				return NewProcessingError(i+1, err)
 			}
 			if driver == postgresDriver && row.GetInsertColumns()[0] == "\"id\"" {
 				err = fixPostgresPKSequence(tx, row.Table, "id")
 				if err != nil {
-					tx.Rollback()
 					return NewProcessingError(i+1, err)
 				}
 			}
-		} else {
+		} else if row.GetUpdateColumnsLength() > 0 {
 			// Primary key found, let's run UPDATE query
 			updateQuery := fmt.Sprintf(
 				`UPDATE "%s" SET %s WHERE %s`,
@@ -79,16 +121,17 @@ func Load(data []byte, db *sql.DB, driver string) error {
 				strings.Join(row.GetUpdatePlaceholders(driver), ", "),
 				row.GetWhere(driver, row.GetUpdateColumnsLength()),
 			)
-			values := append(row.GetUpdateValues(), row.GetPKValues()...)
+			values := append(row.GetUpdateValues(primaryKeys), row.GetPKValues()...)
+			if DumpSQL {
+				log.Println("SQL:", updateQuery, values)
+			}
 			_, err := tx.Exec(updateQuery, values...)
 			if err != nil {
-				tx.Rollback() // rollback the transaction
 				return NewProcessingError(i+1, err)
 			}
 			if driver == postgresDriver && row.GetUpdateColumns()[0] == "\"id\"" {
 				err = fixPostgresPKSequence(tx, row.Table, "id")
 				if err != nil {
-					tx.Rollback()
 					return NewProcessingError(i+1, err)
 				}
 			}
@@ -96,12 +139,7 @@ func Load(data []byte, db *sql.DB, driver string) error {
 	}
 
 	// Commit the transaction
-	if err := tx.Commit(); err != nil {
-		tx.Rollback() // rollback the transaction
-		return err
-	}
-
-	return nil
+	return tx.Commit()
 }
 
 // LoadFile ...

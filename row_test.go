@@ -33,28 +33,25 @@ func TestRow(t *testing.T) {
 
 	// Test insert and update column lengths
 	assert.Equal(t, 5, row.GetInsertColumnsLength())
-	assert.Equal(t, 5, row.GetUpdateColumnsLength())
+	assert.Equal(t, 3, row.GetUpdateColumnsLength())
 
 	// Test insert and update columns
 	expectedStrings = []string{"\"other_id\"", "\"some_id\"",
 		"\"boolean_field\"", "\"created_at\"", "\"string_field\""}
 	assert.Equal(t, expectedStrings, row.GetInsertColumns())
-	expectedStrings = []string{"\"other_id\"", "\"some_id\"",
-		"\"boolean_field\"", "\"string_field\"", "\"updated_at\""}
+	expectedStrings = []string{"\"boolean_field\"", "\"string_field\"", "\"updated_at\""}
 	assert.Equal(t, expectedStrings, row.GetUpdateColumns())
 
 	// Test postgres placeholders ($1, $2 and so on)
 	expectedStrings = []string{"$1", "$2", "$3", "$4", "$5"}
 	assert.Equal(t, expectedStrings, row.GetInsertPlaceholders("postgres"))
-	expectedStrings = []string{"\"other_id\" = $1", "\"some_id\" = $2",
-		"\"boolean_field\" = $3", "\"string_field\" = $4", "\"updated_at\" = $5"}
+	expectedStrings = []string{"\"boolean_field\" = $1", "\"string_field\" = $2", "\"updated_at\" = $3"}
 	assert.Equal(t, expectedStrings, row.GetUpdatePlaceholders("postgres"))
 
 	// Test non postgres placeholders (?)
 	expectedStrings = []string{"?", "?", "?", "?", "?"}
 	assert.Equal(t, expectedStrings, row.GetInsertPlaceholders("sqlite"))
-	expectedStrings = []string{"\"other_id\" = ?", "\"some_id\" = ?",
-		"\"boolean_field\" = ?", "\"string_field\" = ?", "\"updated_at\" = ?"}
+	expectedStrings = []string{"\"boolean_field\" = ?", "\"string_field\" = ?", "\"updated_at\" = ?"}
 	assert.Equal(t, expectedStrings, row.GetUpdatePlaceholders("sqlite"))
 
 	// Test where clause
