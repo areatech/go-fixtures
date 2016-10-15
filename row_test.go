@@ -23,7 +23,7 @@ func TestRow(t *testing.T) {
 	}
 
 	// Run the init method to populate internal variables
-	row.Init()
+	row.Init(&Context{SetUpdatedAtOnInsert: DefaultSetUpdatedAtOnInsert})
 
 	var (
 		expectedString     string

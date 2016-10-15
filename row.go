@@ -49,7 +49,7 @@ func (pk *PrimaryKeyReference) Get(values map[string]interface{}) interface{} {
 }
 
 // Init loads internal struct variables
-func (row *Row) Init() {
+func (row *Row) Init(ctx *Context) {
 	// Init
 	row.insertColumns = make([]string, 0, len(row.Fields))
 	row.insertValues = make([]interface{}, 0, len(row.Fields))
@@ -101,7 +101,7 @@ func (row *Row) Init() {
 			row.updateColumns = append(row.updateColumns, fieldKey)
 			row.updateValues = append(row.updateValues, time.Now())
 
-			if SetUpdatedAtOnInsert {
+			if ctx.SetUpdatedAtOnInsert {
 				row.insertColumns = append(row.insertColumns, fieldKey)
 				row.insertValues = append(row.insertValues, time.Now())
 			}
