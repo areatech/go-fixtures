@@ -60,6 +60,36 @@ CREATE TABLE string_key_table(
 );
 `
 
+var testSchemaPostgresWithSerial = `
+CREATE TABLE some_table(
+  id SERIAL PRIMARY KEY NOT NULL,
+  string_field VARCHAR(50) NOT NULL,
+  boolean_field BOOL NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE,
+  updated_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE TABLE other_table(
+  id SERIAL PRIMARY KEY NOT NULL,
+  int_field INT NOT NULL,
+  boolean_field BOOL NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE,
+  updated_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE TABLE join_table(
+  some_id INT NOT NULL,
+  other_id INT NOT NULL,
+  PRIMARY KEY(some_id, other_id)
+);
+
+CREATE TABLE string_key_table(
+  id VARCHAR(50) PRIMARY KEY NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE,
+  updated_at TIMESTAMP WITH TIME ZONE
+);
+`
+
 var testData = `
 ---
 - table: 'some_table'
@@ -82,6 +112,36 @@ var testData = `
   pk:
     some_id: 1
     other_id: 2
+- table: 'string_key_table'
+  pk:
+    id: 'new_id'
+  fields:
+    created_at: 'ON_INSERT_NOW()'
+    updated_at: 'ON_UPDATE_NOW()'
+`
+
+var testDataWithPKGen = `
+---
+- table: 'some_table'
+  pk:
+    id: PK_GENERATE(key1)
+  fields:
+    string_field: 'foobar'
+    boolean_field: true
+    created_at: 'ON_INSERT_NOW()'
+    updated_at: 'ON_UPDATE_NOW()'
+- table: 'other_table'
+  pk:
+    id: PK_GENERATE(key2)
+  fields:
+    int_field: 123
+    boolean_field: false
+    created_at: 'ON_INSERT_NOW()'
+    updated_at: 'ON_UPDATE_NOW()'
+- table: 'join_table'
+  pk:
+    some_id: PK_REFERENCE(key1)
+    other_id: PK_REFERENCE(key2)
 - table: 'string_key_table'
   pk:
     id: 'new_id'
