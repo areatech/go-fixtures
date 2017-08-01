@@ -77,7 +77,7 @@ func Load(data []byte, db *sql.DB, driver string) error {
 				`UPDATE "%s" SET %s WHERE %s`,
 				row.Table,
 				strings.Join(row.GetUpdatePlaceholders(driver), ", "),
-				row.GetWhere(driver, row.GetUpdateColumnsLength()),
+				row.GetWhere(driver, row.GetUpdateValuesLength()),
 			)
 			values := append(row.GetUpdateValues(), row.GetPKValues()...)
 			_, err := tx.Exec(updateQuery, values...)
