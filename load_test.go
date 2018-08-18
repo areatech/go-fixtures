@@ -59,7 +59,7 @@ CREATE TABLE string_key_table(
   updated_at TIMESTAMP WITH TIME ZONE
 );
 
-CREATE TABLE api.some_table(
+CREATE TABLE schema.some_table(
   id INT PRIMARY KEY NOT NULL,
   string_field VARCHAR(50) NOT NULL,
   boolean_field BOOL NOT NULL,
@@ -96,7 +96,7 @@ var testData = `
   fields:
     created_at: 'ON_INSERT_NOW()'
     updated_at: 'ON_UPDATE_NOW()'
-- table: 'api.some_table'
+- table: 'schema.some_table'
   pk:
     id: 1
   fields:
