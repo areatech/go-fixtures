@@ -58,6 +58,14 @@ CREATE TABLE string_key_table(
   created_at TIMESTAMP WITH TIME ZONE,
   updated_at TIMESTAMP WITH TIME ZONE
 );
+
+CREATE TABLE api.some_table(
+  id INT PRIMARY KEY NOT NULL,
+  string_field VARCHAR(50) NOT NULL,
+  boolean_field BOOL NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE,
+  updated_at TIMESTAMP WITH TIME ZONE
+);
 `
 
 var testData = `
@@ -88,6 +96,14 @@ var testData = `
   fields:
     created_at: 'ON_INSERT_NOW()'
     updated_at: 'ON_UPDATE_NOW()'
+- table: 'api.some_table'
+  pk:
+    id: 1
+  fields:
+    string_field: 'foobar'
+    boolean_field: true
+    created_at: 'ON_INSERT_NOW()'
+    updated_at: 'ON_UPDATE_NOW()'
 `
 
 var (
@@ -95,5 +111,6 @@ var (
 	fixtureFiles = []string{
 		"fixtures/test_fixtures1.yml",
 		"fixtures/test_fixtures2.yml",
+		"fixtures/test_fixtures3.yml",
 	}
 )

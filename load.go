@@ -38,6 +38,23 @@ func Load(data []byte, db *sql.DB, driver string) error {
 		// Load internat struct variables
 		row.Init()
 
+		s := strings.Split(row.Table, ".")
+		switch {
+			case len(s) > 2:
+				return fmt.Errorf("Table name wrong format in yaml")
+			case len(s) == 2:
+				q := fmt.Sprintf(`SET SEARCH_PATH TO %s`, s[0])
+				_, err := tx.Exec(q)
+				if err != nil {
+					tx.Rollback() // rollback the transaction
+					return NewProcessingError(i+1, err)
+				}
+				row.Table = s[1]
+			case len(s) == 1:
+				// table name without schema, do nothing
+			default:
+				return fmt.Errorf("Table nmae is empty in yaml")
+		}
 		// Run a SELECT query to find out if we need to insert or UPDATE
 		selectQuery := fmt.Sprintf(
 			`SELECT COUNT(*) FROM "%s" WHERE %s`,
