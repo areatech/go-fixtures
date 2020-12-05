@@ -1,0 +1,20 @@
+---
+language: go
+
+go:
+  - 1.13.x
+
+env:
+  - GO111MODULE=on
+
+services:
+  - docker
+
+before_script:
+  - createuser --createdb go_fixtures
+
+script:
+  - make test-with-coverage
+
+after_success:
+  - bash <(curl -s https://codecov.io/bash)

@@ -1,8 +1,13 @@
-[![Codeship Status for AreaHQ/go-fixtures](https://codeship.com/projects/f196fa10-84fb-0133-c7be-429ee0939cc9/status?branch=master)](https://codeship.com/projects/122147)
-
-# go-fixtures
+## go-fixtures
 
 Django style fixtures for Golang's excellent built-in `database/sql` library. Currently only `YAML` fixtures are supported.
+
+[![Travis Status for RichardKnop/go-fixtures](https://travis-ci.org/RichardKnop/go-fixtures.svg?branch=master&label=linux+build)](https://travis-ci.org/RichardKnop/go-fixtures)
+[![godoc for RichardKnop/go-fixtures](https://godoc.org/github.com/nathany/looper?status.svg)](http://godoc.org/github.com/RichardKnop/go-fixtures)
+[![codecov for RichardKnop/go-fixtures](https://codecov.io/gh/RichardKnop/go-fixtures/branch/master/graph/badge.svg)](https://codecov.io/gh/RichardKnop/go-fixtures)
+
+---
+
 
 There are two reserved values you can use for `datetime` fields:
 
@@ -48,8 +53,8 @@ import (
 	"io/ioutil"
 	"log"
 
-	fixtures "github.com/AreaHQ/go-fixtures"
-	"github.com/codegangsta/cli"
+	"github.com/RichardKnop/go-fixtures"
+	"github.com/urfave/cli"
 	// Drivers
 	_ "github.com/lib/pq"
 )
@@ -78,22 +83,23 @@ func main() {
 		{
 			Name:  "loaddata",
 			Usage: "load data from fixture",
-			Action: func(c *cli.Context) {
+			Action: func(c *cli.Context) error {
 				data, err := ioutil.ReadFile(c.Args().First())
 				if err != nil {
-					log.Fatal(err)
+					return err
 				}
 
 				if err := fixtures.Load(data, db, "postgres"); err != nil {
-					log.Fatal(err)
+					return err
 				}
 			},
 		},
 		{
 			Name:  "runserver",
 			Usage: "run web server",
-			Action: func(c *cli.Context) {
+			Action: func(c *cli.Context) error {
 				// Run your web server here
+				return nil
 			},
 		},
 	}

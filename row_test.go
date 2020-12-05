@@ -1,14 +1,17 @@
-package fixtures
+package fixtures_test
 
 import (
 	"testing"
 
+	"github.com/RichardKnop/go-fixtures"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestRow(t *testing.T) {
+	t.Parallel()
+
 	// Create a test Row instance
-	row := &Row{
+	row := &fixtures.Row{
 		Table: "some_table",
 		PK: map[string]interface{}{
 			"some_id":  interface{}(1),

@@ -1,4 +1,4 @@
-package fixtures
+package fixtures_test
 
 var testSchemaSQLite = `
 CREATE TABLE some_table(
